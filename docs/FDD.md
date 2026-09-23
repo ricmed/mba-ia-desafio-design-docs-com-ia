@@ -12,6 +12,8 @@
 > Este documento detalha **como construir**. As decisões que o sustentam estão nos [ADRs](adrs/README.md); a proposta em nível de arquitetura e as questões em aberto estão no [RFC](RFC.md).
 >
 > **Convenção de origem:** itens marcados com timestamp `[hh:mm] Nome` vêm da transcrição da reunião. Itens marcados com **(inferência de desenho)** não foram discutidos e são proposta deste documento, sujeitas a revisão.
+>
+> **Convenção de caminhos:** todo caminho de arquivo citado neste documento **existe hoje** no repositório, com duas exceções, que são justamente os artefatos que esta feature cria: `src/modules/webhooks/` e `src/worker.ts`. Ambos aparecem sempre marcados como **(a criar)**.
 
 ---
 
@@ -49,8 +51,8 @@ A solução é o padrão Outbox ([ADR-001](adrs/ADR-001-outbox-no-mysql.md)) com
 
 ### 3.1 Incluso
 
-- Módulo `src/modules/webhooks` com controller, service, repository, routes e schemas ([09:27] Bruno).
-- Entrypoint `src/worker.ts` e script `npm run worker` ([09:11] Larissa).
+- Módulo `src/modules/webhooks/` **(a criar)** com controller, service, repository, routes e schemas ([09:27] Bruno).
+- Entrypoint `src/worker.ts` **(a criar)** e script `npm run worker` ([09:11] Larissa).
 - Quatro tabelas novas no MySQL e uma migration Prisma.
 - Emissão de evento na transição de status de pedido ([09:40] Bruno).
 - CRUD de configuração de webhook, rotação de secret, histórico de entregas e replay de DLQ.
@@ -63,7 +65,7 @@ A solução é o padrão Outbox ([ADR-001](adrs/ADR-001-outbox-no-mysql.md)) com
 | Dashboard visual para o cliente | [09:40] Larissa — projeto do time de frontend |
 | Webhooks inbound (cliente → plataforma) | [09:02] Marcos — só outbound |
 | Arquivamento/expurgo das linhas entregues | [09:08] Diego — fora do escopo da feature |
-| Rate limiting de saída por cliente | [09:39] Diego e Larissa — observar e decidir depois |
+| Rate limiting de saída por cliente | [09:39] Diego, [09:39] Larissa — observar e decidir depois |
 | Múltiplos workers / ordering global | [09:13] Diego — problema do futuro |
 | Eventos que não sejam mudança de status de pedido | Só `order.status_changed` foi definido ([09:43] Diego) |
 
@@ -176,8 +178,8 @@ sequenceDiagram
 
 Pontos de desenho:
 
-- **A assinatura é `publishWebhookEvent(tx, order, fromStatus, toStatus)`**, recebendo o `tx` da transação corrente, em vez de injetar um repository inteiro no `OrderService` — "função pura recebendo o tx" ([09:41] Bruno e Diego).
-- **O filtro de eventos é aplicado aqui, na inserção**, e não no envio: se nenhum webhook do cliente quer aquele status, a linha nem é criada, economizando linha na tabela ([09:34] Bruno e Diego).
+- **A assinatura é `publishWebhookEvent(tx, order, fromStatus, toStatus)`**, recebendo o `tx` da transação corrente, em vez de injetar um repository inteiro no `OrderService` — "função pura recebendo o tx" ([09:41] Bruno, [09:41] Diego).
+- **O filtro de eventos é aplicado aqui, na inserção**, e não no envio: se nenhum webhook do cliente quer aquele status, a linha nem é criada, economizando linha na tabela ([09:34] Bruno, [09:34] Diego).
 - **A payload é renderizada agora** e persistida como snapshot ([09:52] Larissa).
 - **Falha em qualquer ponto derruba tudo** ([09:41] Diego).
 
@@ -202,7 +204,7 @@ flowchart TD
     L --> A
 ```
 
-- **Batch pequeno** de eventos pendentes mais antigos, processados em ordem de `createdAt` ([09:08] e [09:12] Diego). O tamanho do batch não foi discutido — **(inferência de desenho)**: começar com 20 e ajustar por medição.
+- **Batch pequeno** de eventos pendentes mais antigos, processados em ordem de `createdAt` ([09:08] Diego, [09:12] Diego). O tamanho do batch não foi discutido — **(inferência de desenho)**: começar com 20 e ajustar por medição.
 - **Worker único** ([09:12] Diego): não há lock distribuído nesta fase. O estado `PROCESSING` protege contra duplo processamento em caso de reinício concomitante.
 - O worker abre **seu próprio `PrismaClient`** ([09:30] Bruno), conectando à mesma `DATABASE_URL`.
 
@@ -231,7 +233,7 @@ O replay é **manual**, via `POST /api/v1/admin/webhooks/dead-letter/:id/replay`
 
 ## 6. Contratos públicos
 
-Todos os endpoints são montados sob o prefixo `/api/v1`, conforme `app.use('/api/v1', buildApiRouter(controllers))` em `src/app.ts`, e passam pelo `authenticate` de `src/middlewares/auth.middleware.ts` ([09:32] Marcos e Larissa). Erros seguem o envelope de `src/middlewares/error.middleware.ts`: `{ "error": { "code", "message", "details"? } }`.
+Todos os endpoints são montados sob o prefixo `/api/v1`, conforme `app.use('/api/v1', buildApiRouter(controllers))` em `src/app.ts`, e passam pelo `authenticate` de `src/middlewares/auth.middleware.ts` ([09:32] Marcos, [09:32] Larissa). Erros seguem o envelope de `src/middlewares/error.middleware.ts`: `{ "error": { "code", "message", "details"? } }`.
 
 ### 6.1 `POST /api/v1/webhooks` — cadastrar endpoint
 
@@ -380,7 +382,7 @@ Origem: ([09:34] Marcos) — "os últimos 100 webhooks que vocês mandaram pra m
 
 ### 6.7 `POST /api/v1/admin/webhooks/dead-letter/:id/replay` — reprocessar evento morto
 
-Origem: ([09:18] e [09:35] Diego). **Exige role `ADMIN`** ([09:36] Sofia), aplicada com o `requireRole('ADMIN')` de `src/middlewares/auth.middleware.ts`.
+Origem: ([09:18] Diego, [09:35] Diego). **Exige role `ADMIN`** ([09:36] Sofia), aplicada com o `requireRole('ADMIN')` de `src/middlewares/auth.middleware.ts`.
 
 **Request:** sem corpo.
 
@@ -453,7 +455,7 @@ Todos os códigos do módulo usam o prefixo `WEBHOOK_` ([09:28] Bruno, [09:29] L
 |---|---|---|---|
 | `WEBHOOK_DELIVERY_TIMEOUT` | cliente não respondeu em 10s | conta tentativa, agenda backoff | [09:42] Diego |
 | `WEBHOOK_DELIVERY_FAILED` | resposta fora de 2xx, erro de conexão, DNS ou TLS | conta tentativa, agenda backoff | [09:15] Diego |
-| `WEBHOOK_PAYLOAD_TOO_LARGE` | payload excede **64KB** | evento **não é enviado**; vai direto para a DLQ | [09:23]–[09:24] Sofia e Diego |
+| `WEBHOOK_PAYLOAD_TOO_LARGE` | payload excede **64KB** | evento **não é enviado**; vai direto para a DLQ | [09:23] Sofia, [09:24] Diego |
 | `WEBHOOK_MAX_RETRIES_EXCEEDED` | 5 tentativas consumidas | evento movido para `webhook_dead_letter` | [09:15] Diego |
 
 > Sobre `WEBHOOK_PAYLOAD_TOO_LARGE`: Sofia foi explícita em preferir **erro a truncamento** — "se chegou nesse tamanho, tem algo errado" ([09:23]). O teto de 64KB foi fixado por Diego como generoso para os eventos reais ([09:24]) e classificado por Larissa como requisito não funcional, não como decisão arquitetural ([09:24]).
@@ -472,7 +474,7 @@ Todos os códigos do módulo usam o prefixo `WEBHOOK_` ([09:28] Bruno, [09:29] L
 | **Garantia de entrega** | at-least-once; dedup pelo cliente via `X-Event-Id` | [09:26] Larissa |
 | **Garantia de emissão** | transacional — rollback da transação elimina o evento | [09:06] Diego |
 | **Ordering** | por `order_id`, enquanto houver worker único | [09:12] Diego |
-| **Proteção de tamanho** | rejeita payload > 64KB | [09:24] Diego e Larissa |
+| **Proteção de tamanho** | rejeita payload > 64KB | [09:24] Diego, [09:24] Larissa |
 
 **Fallback:** não há canal alternativo de notificação. O e-mail de aviso ao cliente foi explicitamente adiado para uma fase futura ([09:37] Larissa), então o único caminho de recuperação após a DLQ é o replay manual.
 

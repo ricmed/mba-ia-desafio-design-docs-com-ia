@@ -25,7 +25,7 @@ Também era preciso decidir o destino do evento que esgota as tentativas e se o 
 - **Teto de 5 tentativas** ([09:15] Diego, fechado em [09:16] Larissa).
 - **Critério de falha:** resposta de erro do cliente ou **timeout de 10 segundos** sem resposta ([09:42] Diego).
 - **DLQ em tabela separada** `webhook_dead_letter`, guardando a payload, o motivo da falha e o timestamp ([09:18] Diego). Esgotadas as tentativas, o evento sai da outbox principal e vai para lá.
-- **Reprocessamento manual** via endpoint administrativo `POST /admin/webhooks/dead-letter/:id/replay`, que recoloca o evento na outbox como pendente ([09:18] e [09:35] Diego).
+- **Reprocessamento manual** via endpoint administrativo `POST /admin/webhooks/dead-letter/:id/replay`, que recoloca o evento na outbox como pendente ([09:18] Diego, [09:35] Diego).
 - **Replay exige role `ADMIN`** e **registra em log quem executou**, para auditoria ([09:36] Sofia, [09:36] Larissa). O controle reaproveita o `requireRole` já existente em `src/middlewares/auth.middleware.ts`.
 
 ## Alternativas Consideradas

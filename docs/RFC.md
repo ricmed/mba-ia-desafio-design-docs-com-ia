@@ -41,7 +41,7 @@ O problema tem prazo e consequência comercial: a Atlas indicou que pode migrar 
 
 O parâmetro de "tempo real" foi negociado e é explícito: **qualquer latência abaixo de 10 segundos** atende, desde que a notificação não fique pendurada ([09:02] Marcos).
 
-O escopo é **exclusivamente outbound** — os clientes querem receber, não enviar ([09:02] Marcos e Sofia).
+O escopo é **exclusivamente outbound** — os clientes querem receber, não enviar ([09:02] Sofia, [09:02] Marcos).
 
 ---
 
@@ -52,7 +52,7 @@ O escopo é **exclusivamente outbound** — os clientes querem receber, não env
 ```mermaid
 flowchart LR
     A["PATCH /orders/:id/status<br/>order.service.changeStatus"] -->|"mesma transação SQL"| B[("orders +<br/>order_status_history +<br/>webhook_outbox")]
-    B -.->|"polling 2s"| C["Worker<br/>src/worker.ts<br/>processo separado"]
+    B -.->|"polling 2s"| C["Worker (a criar)<br/>src/worker.ts<br/>processo separado"]
     C -->|"POST HTTPS assinado<br/>HMAC-SHA256, timeout 10s"| D["Endpoint do cliente"]
     C -->|"sucesso / falha"| E[("webhook_deliveries<br/>histórico")]
     C -->|"falhou 5 tentativas"| F[("webhook_dead_letter")]
@@ -72,7 +72,7 @@ O fluxo tem três movimentos independentes:
 - **Retry 1m/5m/30m/2h/12h, 5 tentativas, DLQ em tabela separada** com replay manual restrito a `ADMIN` → [ADR-003](adrs/ADR-003-retry-backoff-exponencial-e-dlq.md)
 - **HMAC-SHA256 com secret por endpoint**, rotação com grace de 24h, URL obrigatoriamente `https` → [ADR-004](adrs/ADR-004-hmac-sha256-com-secret-por-endpoint.md)
 - **Entrega at-least-once**, dedup do lado do cliente pelo `X-Event-Id` → [ADR-005](adrs/ADR-005-entrega-at-least-once-com-x-event-id.md)
-- **Reuso integral dos padrões do projeto** — módulo em `src/modules/webhooks`, `AppError`, Pino, middleware de erro, schemas Zod, prefixo `WEBHOOK_` nos códigos de erro → [ADR-006](adrs/ADR-006-reuso-dos-padroes-existentes-do-projeto.md)
+- **Reuso integral dos padrões do projeto** — módulo em `src/modules/webhooks/` (a criar), `AppError`, Pino, middleware de erro, schemas Zod, prefixo `WEBHOOK_` nos códigos de erro → [ADR-006](adrs/ADR-006-reuso-dos-padroes-existentes-do-projeto.md)
 - **Payload renderizado como snapshot na inserção**, para o evento refletir o estado do pedido no momento da transição → [ADR-007](adrs/ADR-007-payload-snapshot-na-insercao-do-outbox.md)
 
 ### 3.3 Superfície de API
@@ -88,15 +88,17 @@ Quatro grupos de endpoints, todos autenticados com o JWT já existente do sistem
 
 O `customer_id` **não** vem do JWT: o token atual representa o usuário operador, não o cliente, então o identificador do cliente trafega no corpo ou no path ([09:32] Bruno, [09:32] Larissa).
 
-O filtro de eventos é aplicado **na inserção** do outbox, não no envio: se nenhum webhook do cliente quer aquele status, a linha nem é criada ([09:34] Bruno e Diego).
+O filtro de eventos é aplicado **na inserção** do outbox, não no envio: se nenhum webhook do cliente quer aquele status, a linha nem é criada ([09:34] Bruno, [09:34] Diego).
 
 Contratos completos, com payloads e status codes, estão no [FDD](FDD.md).
 
 ### 3.4 Integração com o código existente
 
-O ponto de acoplamento é único e cirúrgico: o método `changeStatus` de `src/modules/orders/order.service.ts`. A proposta é uma função `publishWebhookEvent(tx, order, fromStatus, toStatus)` que recebe o `tx` da transação corrente, em vez de injetar um repository inteiro no `OrderService` ([09:41] Bruno e Diego).
+O ponto de acoplamento é único e cirúrgico: o método `changeStatus` de `src/modules/orders/order.service.ts`. A proposta é uma função `publishWebhookEvent(tx, order, fromStatus, toStatus)` que recebe o `tx` da transação corrente, em vez de injetar um repository inteiro no `OrderService` ([09:41] Bruno, [09:41] Diego).
 
 Todo o resto — hierarquia de erros, logger, middleware de erro, validação Zod, `requireRole` — é reuso sem alteração ([09:29] Bruno). O detalhamento por arquivo está na seção "Integração com o sistema existente" do [FDD](FDD.md).
+
+Os únicos caminhos citados nesta proposta que **ainda não existem** são os dois artefatos que a feature cria: o módulo `src/modules/webhooks/` e o entrypoint `src/worker.ts`. Todo o restante já está no repositório.
 
 ---
 
@@ -142,7 +144,7 @@ Pontos levantados na reunião e **não decididos** — precisam de posição ant
 
 Diego levantou: se um cliente tem 50 pedidos mudando de status em um minuto, bombardeamos o endpoint dele com 50 chamadas? ([09:38])
 
-A posição foi **observar e implementar se virar problema**, registrando como ponto em aberto ([09:39] Diego e Larissa). Não há decisão sobre limite, janela ou comportamento ao atingi-lo.
+A posição foi **observar e implementar se virar problema**, registrando como ponto em aberto ([09:39] Diego, [09:39] Larissa). Não há decisão sobre limite, janela ou comportamento ao atingi-lo.
 
 ### 5.2 Estratégia de escala preservando ordering
 

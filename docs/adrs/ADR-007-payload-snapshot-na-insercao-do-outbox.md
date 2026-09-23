@@ -39,7 +39,7 @@ A outbox armazenaria uma referência mínima, e o worker buscaria o pedido para 
 
 Incluir a lista de itens do pedido no payload.
 
-- Trade-off que motivou o descarte: infla a mensagem sem necessidade. Quem precisar de detalhe consulta `GET /orders/:id` depois ([09:43] Diego); Bruno reforçou o ponto de manter o payload enxuto ([09:44]). Um payload enxuto também ajuda a respeitar o teto de 64KB definido como requisito não funcional ([09:24] Diego e Larissa).
+- Trade-off que motivou o descarte: infla a mensagem sem necessidade. Quem precisar de detalhe consulta `GET /orders/:id` depois ([09:43] Diego); Bruno reforçou o ponto de manter o payload enxuto ([09:44]). Um payload enxuto também ajuda a respeitar o teto de 64KB definido como requisito não funcional ([09:24] Diego, [09:24] Larissa).
 
 ## Consequências
 
